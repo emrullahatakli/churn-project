@@ -150,12 +150,10 @@ with mlflow.start_run(run_name="Churn_RandomForest_v1"):
     ax[1].grid(alpha=0.3)
 
     plt.suptitle(
-        "Optimize Edilmiş Random Forest Model Değerlendirme Sonuçları", fontsize=16)"""
-
-
+        "Optimize Edilmiş Random Forest Model Değerlendirme Sonuçları", fontsize=16)
     plt.savefig("roc_auc_curve.png")
     mlflow.log_artifact("roc_auc.png")
-    plt.close()
+    plt.close()"""
 
     input_example = X_train.head()
 
