@@ -1,0 +1,28 @@
+name: Model Eğitim Pipeline
+
+on:
+  push: #Ne zaman tetiklenecek
+    branches:
+      -main #Sadece 'main' dalına push yapıldığında
+
+jobs:
+  train: #işin adı(istediğimiz ismi koyabiliriz)
+    runs-on: ubuntu-latest #hangi işletim sisteminde çalışsın (ubuntu-latest githubın bize sağladığı temiz bir linux sunucusudur.)
+
+    steps:
+    - name: 1. Kodu sunucuya indir
+      uses: actions/checkout@v3 #uses benim yerime hazır bir komut çalıştır demektir. actions/checkout@v3 githubın yazdığı hazır bir araçtır. projeyi git clone yaparak sunucuya indirir.
+
+    - name: 2. Python 3.9 Kur
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: 3. Kutuphaneleri yükle # run hazır araç kullanma doğrudan terminal komutu çalıştır demektir. | işareti alt satırlardaki komutlar da bu adıma dahil demektir.
+      run: |
+        pip -m install --upgrade pip
+        pip install -r requirements.txt 
+
+    - name: 4. Modeli eğit (train.py çalıştır)
+      run: |
+        python train.py
