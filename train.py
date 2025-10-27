@@ -1,14 +1,17 @@
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
 from sklearn.metrics import roc_auc_score, precision_score, recall_score, f1_score
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, classification_report
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, classification_report, roc_curve
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score, cross_validate
+import mlflow
+import mlflow.sklearn
 
 df = pd.read_csv("/Users/emrullahatakli/Desktop/kod/end-to-end/churn-project/data/telco_churn.csv")
 
@@ -76,44 +79,88 @@ X_test_scaled = scaler.transform(X_test)
 smote = SMOTE(random_state=42)
 X_train_resampled, y_train_resampled = smote.fit_resample(X_train_scaled, y_train)
 
-best_params_rf = {
-    "n_estimators": 20,
-    "max_depth": 5,
-    "min_samples_split": 5,
-    "min_samples_leaf": 4,
-    "criterion": "entropy",
-    "class_weight": "balanced",
-}
+with mlflow.start_run(run_name="Churn_RandomForest_v1"):
 
-final_rf_model = RandomForestClassifier(**best_params_rf, random_state=42, n_jobs=-1)
-final_rf_model.fit(X_train_resampled, y_train_resampled)
+    best_params_rf = {
+        "n_estimators": 20,
+        "max_depth": 5,
+        "min_samples_split": 5,
+        "min_samples_leaf": 4,
+        "criterion": "entropy",
+        "class_weight": "balanced",
+    }
 
-y_final_rf_pred = final_rf_model.predict(X_test_scaled)
-y_final_rf_pred_proba = final_rf_model.predict_proba(X_test_scaled)[:, 1]
+    final_rf_model = RandomForestClassifier(**best_params_rf, random_state=42, n_jobs=-1)
+    final_rf_model.fit(X_train_resampled, y_train_resampled)
 
-final_rf_auc_score = roc_auc_score(y_test, y_final_rf_pred_proba)
+    y_final_rf_pred = final_rf_model.predict(X_test_scaled)
+    y_final_rf_pred_proba = final_rf_model.predict_proba(X_test_scaled)[:, 1]
 
-print("Random Forest Test Seti Performansı")
-print(classification_report(y_test, y_final_rf_pred))
-print(f"Test AUC Skor: {final_rf_auc_score:.4f}\n")
+    final_rf_auc_score = roc_auc_score(y_test, y_final_rf_pred_proba)
 
-final_xgb_model_precision = precision_score(y_test, y_final_rf_pred)
-final_xgb_model_recall = recall_score(y_test, y_final_rf_pred)
-final_xgb_model_f1 = f1_score(y_test, y_final_rf_pred)
+    print("Random Forest Test Seti Performansı")
+    print(classification_report(y_test, y_final_rf_pred))
+    print(f"Test AUC Skor: {final_rf_auc_score:.4f}\n")
 
-print("Metrikler")
-print(f"Precision: {final_xgb_model_precision:.4f}")
-print(f"Recall: {final_xgb_model_recall:.4f}")
-print(f"F1 Score: {final_xgb_model_f1:.4f}\n")
+    final_rf_model_precision = precision_score(y_test, y_final_rf_pred)
+    final_rf_model_recall = recall_score(y_test, y_final_rf_pred)
+    final_rf_model_f1 = f1_score(y_test, y_final_rf_pred)
 
-cv_results_rf = cross_validate(
-    final_rf_model,
-    X_train_resampled,
-    y_train_resampled,
-    cv=5,
-    scoring="roc_auc",
-    return_train_score=True,
-)
+    print("Metrikler")
+    print(f"Precision: {final_rf_model_precision:.4f}")
+    print(f"Recall: {final_rf_model_recall:.4f}")
+    print(f"F1 Score: {final_rf_model_f1:.4f}\n")
 
-print(f"Eğitim Skoru: {cv_results_rf['train_score'].mean()}")
-print(f"Validasyon Skoru: {cv_results_rf['test_score'].mean()}")
+    cv_results_rf = cross_validate(
+        final_rf_model,
+        X_train_resampled,
+        y_train_resampled,
+        cv=5,
+        scoring="roc_auc",
+        return_train_score=True,
+    )
+
+    print(f"Eğitim Skoru: {cv_results_rf['train_score'].mean()}")
+    print(f"Validasyon Skoru: {cv_results_rf['test_score'].mean()}")
+
+    mlflow.log_params(best_params_rf)
+    mlflow.log_metric("recall", final_rf_model_recall)
+    mlflow.log_metric("precision", final_rf_model_precision)
+    mlflow.log_metric("f1_score", final_rf_model_f1)
+    mlflow.log_metric("auc_score", final_rf_auc_score)
+
+    """cm_rf = confusion_matrix(y_test, y_final_rf_pred)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm_rf, display_labels=final_rf_model.classes_)
+    disp.plot(cmap = plt.cm.Blues)
+    plt.savefig("confusion_matrix.png")
+
+    mlflow.log_artifact("confusion_matrix.png")
+    plt.close()
+
+    fig, ax = plt.subplots(1, 2, figsize=(16, 6))
+    fpr, tpr, _ = roc_curve(y_test, y_final_rf_pred_proba)
+    ax[1].plot(
+        fpr, tpr, color="orange", lw=2, label=f"ROC eğrisi (AUC = {final_rf_auc_score:.2f})"
+    )
+    ax[1].plot([0, 1], [0, 1], color="red", lw=2, linestyle="--", label="Rastgele Tahmin")
+    ax[1].set_title("Optimize Edilmiş Random Forest AUC-ROC Eğrisi")
+    ax[1].set_xlabel("Yanlış Pozitif Oranı (FPR)")
+    ax[1].set_ylabel("Gerçek Pozitif Oranı (TPR)")
+    ax[1].legend(loc="lower right")
+    ax[1].grid(alpha=0.3)
+
+    plt.suptitle(
+        "Optimize Edilmiş Random Forest Model Değerlendirme Sonuçları", fontsize=16)"""
+
+
+    plt.savefig("roc_auc_curve.png")
+    mlflow.log_artifact("roc_auc.png")
+    plt.close()
+
+    input_example = X_train.head()
+
+    mlflow.sklearn.log_model(sk_model=final_rf_model,
+                             name="model",
+                             input_example=input_example)
+
+    print("MLFlow loglama tamamlandı.")
